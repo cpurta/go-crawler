@@ -20,7 +20,7 @@ func main() {
     }
     cache := &URLCache{}
 
-    fetcher := NetFetcher{}
+    fetcher := URLFetcher{}
     go Crawl(url, depth, fetcher, cache)
 }
 
@@ -50,7 +50,7 @@ func checkFlags() error {
         return errors.New("url flag cannot be empty")
     }
     if depth <= 0 {
-        return errors.New("depth cannot be less than ro equal to 0")
+        return errors.New("depth cannot be less than to equal to 0")
     }
 
     return nil
