@@ -1,0 +1,9 @@
+crawler:
+    build: .
+    links:
+        - redis
+    ports:
+        - "6379:6379"
+
+redis:
+    image: redis
