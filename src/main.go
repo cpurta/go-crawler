@@ -33,7 +33,7 @@ func main() {
 	loadEnvironmentVariables()
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     redisHost,
+		Addr:     redisHost + ":" + redisPort,
 		Password: "",
 		DB:       0,
 	})
@@ -47,13 +47,15 @@ func main() {
 	}
 
 	fetcher := URLFetcher{}
-	go Crawl(seedUrl, depth, fetcher, client)
+	Crawl(seedUrl, depth, fetcher, client)
 }
 
 func Crawl(searchUrl string, depth int, fetcher Fetcher, client *redis.Client) {
 	if depth <= 0 {
 		return
 	}
+
+	fmt.Println(searchUrl)
 
 	host, err := url.Parse(searchUrl)
 
@@ -71,7 +73,7 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, client *redis.Client) {
 
 	for _, u := range urls {
 		if validURL.MatchString(u) {
-			go Crawl(u, depth-1, fetcher, client)
+			Crawl(u, depth-1, fetcher, client)
 		}
 	}
 }
