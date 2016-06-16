@@ -54,6 +54,14 @@ $ export REDIS_PORT_6379_TCP_PORT=6379
 
 After you have exported these environment variables you can now run the go-crawler
 
+Example run
+
+```
+$ ./crawler -depth 5 -seed-url http://www.cnn.com -search '^.*www\.cnn\.com.*$'
+```
+
+This example will start crawling the page www.cnn.com and crawl all urls found on that page that have the domain of www.cnn.com
+
 ## Docker
 
 Since we have the Docker image you can specify the environment variables above as a part of running the docker container.
@@ -70,7 +78,7 @@ this in the `docker-compose.yml` file. This is simple as running a simple docker
 ```
 $ docker-compose build
     ...
-$ docker-compose run crawler crawler -url www.google.com -depth 10
+$ docker-compose run crawler crawler -seed-url http://www.google.com -depth 10
 ```
 
 If you are having any issues running the program or are not sure what is require just run the program using the `--help` flag.

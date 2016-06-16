@@ -92,6 +92,10 @@ func checkFlags() error {
 	if depth <= 0 {
 		return errors.New("depth cannot be less than to equal to 0")
 	}
+	// set our regex to look for everything if the user never specified one
+	if search == "" {
+		search = "^.*$"
+	}
 
 	return nil
 }
