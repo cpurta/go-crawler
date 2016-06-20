@@ -9,6 +9,7 @@ fi
 echo "Installing Golang dependencies..."
 go get golang.org/x/net/html
 go get gopkg.in/redis.v3
+go get patrickmn/go-cache
 
 echo "Building crawler"
 go build -o crawler ./src

@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"time"
+
+	"github.com/pmylund/go-cache"
 
 	"gopkg.in/redis.v3"
 )
@@ -18,6 +21,8 @@ var (
 	depth   int
 
 	validURL *regexp.Regexp
+
+	urlCache := cache.New(5*time.Minute, 30*time.Second)
 
 	// Environment variable from docker-compose
 	redisHost string
@@ -71,8 +76,14 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, client *redis.Client) {
 		fmt.Printf("Error fetching results from %s: %s", searchUrl, err.Error())
 	}
 
+	// mark that we have already crawled this page in our cache
+	urlCache.Set(searchUrl, "crawled", cache.NoExpiration)
+
 	for _, u := range urls {
-		if validURL.MatchString(u) {
+		if url, found := urlCache.Get(u)
+
+		// satisfies our regex and has not already been crawled
+		if validURL.MatchString(u) && !found {
 			Crawl(u, depth-1, fetcher, client)
 		}
 	}
