@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"time"
 
+	influx "github.com/influxdata/influxdb/client/v2"
 	"gopkg.in/redis.v3"
 )
 
@@ -20,8 +22,10 @@ var (
 	validURL *regexp.Regexp
 
 	// Environment variable from docker-compose
-	redisHost string
-	redisPort string
+	redisHost  string
+	redisPort  string
+	influxHost string
+	influxPort string
 )
 
 func main() {
@@ -32,14 +36,24 @@ func main() {
 
 	loadEnvironmentVariables()
 
-	client := redis.NewClient(&redis.Options{
+	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisHost + ":" + redisPort,
 		Password: "",
 		DB:       0,
 	})
 
-	if pong, err := client.Ping().Result(); err != nil {
+	if pong, err := redisClient.Ping().Result(); err != nil {
 		log.Fatalf("%s. Cannot connect to redis client: %s", pong, err.Error())
+	}
+
+	influxClient, err := influx.NewHTTPClient(influx.HTTPConfig{
+		Addr:     fmt.Sprintf("http://%s:%s", influxHost, influxPort),
+		Username: "root",
+		Password: "root",
+	})
+
+	if err != nil {
+		log.Fatalf("Error occured when connecting to InfluxDB", err.Error())
 	}
 
 	if search != "" {
@@ -47,34 +61,66 @@ func main() {
 	}
 
 	fetcher := URLFetcher{}
-	Crawl(seedUrl, depth, fetcher, client)
+	Crawl(seedUrl, depth, fetcher, redisClient, influxClient)
 }
 
-func Crawl(searchUrl string, depth int, fetcher Fetcher, client *redis.Client) {
+func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Client, influxClient influx.Client) {
 	if depth <= 0 {
 		return
 	}
 
 	fmt.Println(searchUrl)
 
+	bp, _ := influx.NewBatchPoints(influx.BatchPointsConfig{
+		Database:  "crawler",
+		Precision: "s",
+	})
+
 	host, err := url.Parse(searchUrl)
 
 	// Send this to our redis queue for indexing
 	if err != nil {
-		client.LPush("unknown_url_crawler_queue", searchUrl)
+		redisClient.LPush("unknown_url_crawler_queue", searchUrl)
 	} else {
-		client.LPush(host.Host+"_crawler_queue", searchUrl)
+		redisClient.LPush(host.Host+"_crawler_queue", searchUrl)
 	}
 
+	// let's determine how long it is taking to fetch all urls on a page
+	startFetch := time.Now()
 	urls, err := fetcher.Fetch(searchUrl)
+	crawlTime := time.Since(startFetch)
+
 	if err != nil {
-		fmt.Printf("Error fetching results from %s: %s", searchUrl, err.Error())
+		fmt.Printf("Error fetching results from %s: %s\n", searchUrl, err.Error())
+	}
+
+	tags := map[string]string{
+		"domain": host.String(),
+	}
+
+	fields := map[string]interface{}{
+		"urls_found": len(urls),
+		"crawl_time": crawlTime,
 	}
 
 	for _, u := range urls {
 		if validURL.MatchString(u) {
-			Crawl(u, depth-1, fetcher, client)
+			Crawl(u, depth-1, fetcher, redisClient, influxClient)
 		}
+	}
+
+	point, _ := influx.NewPoint(
+		"crawl_usage",
+		tags,
+		fields,
+		time.Now(),
+	)
+
+	// add data point to influx
+	bp.AddPoint(point)
+
+	if err := influxClient.Write(bp); err != nil {
+		log.Printf("Unable to write batch point to influxdb: %s\n", err.Error())
 	}
 }
 
@@ -101,10 +147,21 @@ func checkFlags() error {
 }
 
 func loadEnvironmentVariables() {
+	fmt.Println(os.Environ())
+
 	redisHost = os.Getenv("REDIS_PORT_6379_TCP_ADDR")
 	redisPort = os.Getenv("REDIS_PORT_6379_TCP_PORT")
 
 	if redisHost != "" && redisPort != "" {
 		fmt.Printf("Redis found on %s:%s\n", redisHost, redisPort)
+	}
+
+	influxHost = os.Getenv("INFLUXDB_PORT_8086_TCP_ADDR")
+	influxPort = os.Getenv("INFLUXDB_PORT_8086_TCP_PORT")
+
+	if influxHost != "" && influxPort != "" {
+		fmt.Printf("InfluxDB found on %s:%s\n", influxHost, influxPort)
+	} else if influxHost == "" && influxPort == "" {
+		log.Fatalln("Unable to load InfluxDB environment variables!")
 	}
 }

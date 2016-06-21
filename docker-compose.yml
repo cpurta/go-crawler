@@ -2,8 +2,24 @@ crawler:
     build: .
     links:
         - redis
-    ports:
-        - "6379:6379"
+        - influxdb
+    command: /app/crawler -depth 5 -seed-url http://www.youtube.com
 
 redis:
-    image: redis
+    image: redis:latest
+    ports:
+        - 6379:6379
+
+influxdb:
+    image: tutum/influxdb:latest
+    ports:
+        - 8086:8086
+    environment:
+        - PRE_CREATE_DB="crawler"
+
+chronograf:
+    image: chronograf:latest
+    ports:
+        - 10000:10000
+    links:
+        - influxdb
