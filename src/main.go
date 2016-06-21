@@ -147,8 +147,6 @@ func checkFlags() error {
 }
 
 func loadEnvironmentVariables() {
-	fmt.Println(os.Environ())
-
 	redisHost = os.Getenv("REDIS_PORT_6379_TCP_ADDR")
 	redisPort = os.Getenv("REDIS_PORT_6379_TCP_PORT")
 

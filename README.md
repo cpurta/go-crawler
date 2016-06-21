@@ -5,9 +5,9 @@ It then will take the valid url that it has visited and put that url into a host
 
 Example:
 
-<http://www.cnn.com/world> -> cnn_crawler_queue
+<http://www.cnn.com/world> -> www.cnn.com_crawler_queue
 
-<http://www.youtube.com/watch?v=92hvkm39cn3> -> youtube_crawler_queue
+<http://www.youtube.com/watch?v=92hvkm39cn3> -> www.youtube.com_crawler_queue
 
 # Use Case
 
@@ -19,7 +19,8 @@ redis queues.
 
 # Setup
 
-To locally setup the crawler all you need to do is run the `bootstrap.sh` script. This will ensure that Go is install and that your `$GOPATH` is setup, get all project dependencies, and build the binary.
+To locally setup the crawler all you need to do is run the `bootstrap.sh` script. This will ensure that Go is
+install and that your `$GOPATH` is setup, get all project dependencies, and build the binary.
 
 ```
 $ ./bootstrap.sh
@@ -82,3 +83,32 @@ $ docker-compose run crawler crawler -seed-url http://www.google.com -depth 10
 ```
 
 If you are having any issues running the program or are not sure what is require just run the program using the `--help` flag.
+
+
+# Monitoring
+
+With docker-compose you can now run an instance of InfluxDB and Chronograf to monitor some interesting metrics of go-crawler.
+If you are unfamiliar with [InfluxDB](https://influxdata.com/) or [Chronograf](https://influxdata.com/time-series-platform/chronograf/)
+I highly recommend that you go and check them out as they are awesome open source tools for monitoring and querying realtime data
+gathered by you applications.
+
+## Starting it all up
+
+Thanks to docker-compose this is as simple as running `docker-compose up` as in the `docker-compose.yml` file we have specified all
+images needed and linked all services needed.
+
+```
+$ docker-compose build && docker-compose up
+```
+
+Once we have everything up and running we can look at the metrics of the program in Chronograf in our browser. Since dockers machine
+ip by default is `192.168.99.100` we can use that to access the running Chronograf container. NOTE: If you have this running on another
+docker machine other than `default` you will have to get the ip of the machine running all the programs by using the
+`docker-machine ip [machine]`.
+
+### Dashboards
+
+You should then see the Chronograf UI which you can then register the locally running instance of InfluxDB and create Dashboards
+and query data however you see fit.
+
+![alt text](https://github.com/cpurta/go-crawler/markdown/images/chronograf.png)
