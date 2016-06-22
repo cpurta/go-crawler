@@ -43,14 +43,18 @@ variables in your current shell session to the Redis server.
 
 Redis Environment variables require by go-crawler
 
-|    env variable name      |    env variable value |
-| ------------------------- | --------------------- |
-| REDIS_PORT_6379_TCP_ADDR  |   Redis host          |
-| REDIS_PORT_6379_TCP_PORT  |   Redis port (6379)   |
+|    env variable name         |    env variable value |
+| ---------------------------- | --------------------- |
+|   REDIS_PORT_6379_TCP_ADDR   |   Redis host          |
+|   REDIS_PORT_6379_TCP_PORT   |   Redis port (6379)   |
+| INFLUXDB_PORT_8086_TCP_ADDR  |   Influx host         |
+| INFLUXDB_PORT_8086_TCP_PORT  |   Influx port (8086)  |
 
 ```
 $ export REDIS_PORT_6379_TCP_ADDR=127.0.0.1
 $ export REDIS_PORT_6379_TCP_PORT=6379
+$ export INFLUXDB_PORT_8086_TCP_ADDR=127.0.0.1
+$ export INFLUXDB_PORT_8086_TCP_PORT=8086
 ```
 
 After you have exported these environment variables you can now run the go-crawler
@@ -68,7 +72,7 @@ This example will start crawling the page www.cnn.com and crawl all urls found o
 Since we have the Docker image you can specify the environment variables above as a part of running the docker container.
 
 ```
-$ docker run -it --rm --name crawler -e REDIS_PORT_6379_TCP_ADDR=127.0.0.1 -e REDIS_PORT_6379_TCP_PORT=6379 cpurta/go-crawler:latest
+$ docker run -it --rm --name crawler -e REDIS_PORT_6379_TCP_ADDR=127.0.0.1 -e REDIS_PORT_6379_TCP_PORT=6379 -e INFLUXDB_PORT_8086_TCP_ADDR=127.0.0.1 -e INFLUXDB_PORT_8086_TCP_PORT=8086 cpurta/go-crawler:latest
 ```
 
 ## Docker-compose
