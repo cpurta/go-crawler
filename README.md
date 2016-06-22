@@ -111,4 +111,4 @@ docker machine other than `default` you will have to get the ip of the machine r
 You should then see the Chronograf UI which you can then register the locally running instance of InfluxDB and create Dashboards
 and query data however you see fit.
 
-![alt text](https://github.com/cpurta/go-crawler/markdown/images/chronograf.png)
+![alt text](./markdown/images/chronograf.png)
