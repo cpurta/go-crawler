@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	influx "github.com/influxdata/influxdb/client/v2"
@@ -27,6 +28,11 @@ var (
 	influxHost string
 	influxPort string
 )
+
+var urlcache = struct {
+	m    map[string]error
+	lock sync.Mutex
+}{m: make(map[string]error)}
 
 func main() {
 	initFlags()
@@ -90,6 +96,10 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 	urls, err := fetcher.Fetch(searchUrl)
 	crawlTime := time.Since(startFetch)
 
+	urlcache.lock.Lock()
+	urlcache.m[searchUrl] = err
+	urlcache.lock.Unlock()
+
 	if err != nil {
 		fmt.Printf("Error fetching results from %s: %s\n", searchUrl, err.Error())
 	}
@@ -103,10 +113,25 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		"crawl_time": crawlTime,
 	}
 
+	done := make(chan bool)
 	for _, u := range urls {
-		if validURL.MatchString(u) {
-			Crawl(u, depth-1, fetcher, redisClient, influxClient)
+		// check our cache to make sure that we are not about to crawl
+		// a page we have already visted
+		urlcache.lock.Lock()
+		_, crawled := urlcache.m[u]
+		urlcache.lock.Unlock()
+
+		if validURL.MatchString(u) && !crawled {
+			go func(searchUrl string) {
+				Crawl(searchUrl, depth-1, fetcher, redisClient, influxClient)
+				done <- true
+			}(u)
 		}
+	}
+
+	// wait for all routines to finish
+	for _ = range urls {
+		<-done
 	}
 
 	point, _ := influx.NewPoint(
