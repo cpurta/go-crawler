@@ -7,7 +7,7 @@ crawler:
     links:
         - redis
         - influxdb
-    command: /app/crawler -depth 3 -seed-url 'http://www.youtube.com'
+    command: /app/crawler -depth 5 -seed-url 'https://www.youtube.com/watch?v=zNdkrtfZP8I' -search='^.*\/watch\?v=[a-zA-Z0-9\-]+'
 
 redis:
     image: redis:latest
@@ -19,7 +19,7 @@ influxdb:
     ports:
         - 8086:8086
     environment:
-        - PRE_CREATE_DB="crawler"
+        - PRE_CREATE_DB="crawler;telegraf"
 
 telegraf:
     image: telegraf:latest

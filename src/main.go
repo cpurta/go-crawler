@@ -12,7 +12,7 @@ import (
 	"time"
 
 	influx "github.com/influxdata/influxdb/client/v2"
-	"gopkg.in/redis.v3"
+	"gopkg.in/redis.v4"
 )
 
 var (
@@ -27,6 +27,8 @@ var (
 	redisPort  string
 	influxHost string
 	influxPort string
+
+	urlTest = regexp.MustCompile(`^((http[s]?):\/)?\/?([^:\/\s]+)((\/\w+)*\/)([\w\-\.]+[^#?\s]+)(.*)?(#[\w\-]+)?$`)
 )
 
 var urlcache = struct {
@@ -75,7 +77,7 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		return
 	}
 
-	fmt.Println(searchUrl)
+	fmt.Println("Crawling:", searchUrl)
 
 	bp, _ := influx.NewBatchPoints(influx.BatchPointsConfig{
 		Database:  "crawler",
@@ -113,7 +115,6 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		"crawl_time": crawlTime,
 	}
 
-	done := make(chan bool)
 	for _, u := range urls {
 		// check our cache to make sure that we are not about to crawl
 		// a page we have already visted
@@ -121,17 +122,13 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		_, crawled := urlcache.m[u]
 		urlcache.lock.Unlock()
 
-		if validURL.MatchString(u) && !crawled {
-			go func(searchUrl string) {
-				Crawl(searchUrl, depth-1, fetcher, redisClient, influxClient)
-				done <- true
-			}(u)
+		if !urlTest.MatchString(u) {
+			u = "http://" + host.Host + u
 		}
-	}
 
-	// wait for all routines to finish
-	for _ = range urls {
-		<-done
+		if validURL.MatchString(u) && urlTest.MatchString(u) && !crawled {
+			Crawl(u, depth-1, fetcher, redisClient, influxClient)
+		}
 	}
 
 	point, _ := influx.NewPoint(
@@ -152,7 +149,7 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 func initFlags() {
 	flag.IntVar(&depth, "depth", 0, "The depth of how far the crawler will search in the network graph. Must be greater than 0.")
 	flag.StringVar(&seedUrl, "seed-url", "", "The root url from which the crawler will look for network links.")
-	flag.StringVar(&search, "search", "", `Regex that will be used against the urls crawled. Only urls matching the regex will be crawled. e.g. ^http(s)?://cnn.com\?+([0-9a-zA-Z]=[0-9a-zA-Z])$`)
+	flag.StringVar(&search, "search", "^.*$", `Regex that will be used against the urls crawled. Only urls matching the regex will be crawled. e.g. ^http(s)?://cnn.com\?+([0-9a-zA-Z]=[0-9a-zA-Z])$`)
 }
 
 func checkFlags() error {
@@ -162,10 +159,6 @@ func checkFlags() error {
 	}
 	if depth <= 0 {
 		return errors.New("depth cannot be less than to equal to 0")
-	}
-	// set our regex to look for everything if the user never specified one
-	if search == "" {
-		search = "^.*$"
 	}
 
 	return nil

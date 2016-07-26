@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
-	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -31,10 +34,14 @@ func (f URLFetcher) Fetch(url string) (urls []string, err error) {
 		return nil, err
 	}
 
+	startTime := time.Now()
+
 	if resp.Body != nil {
 		defer resp.Body.Close()
 
-		tokenizer := html.NewTokenizer(resp.Body)
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		tokenizer := html.NewTokenizer(bytes.NewReader(body))
 
 		for {
 			tt := tokenizer.Next()
@@ -50,14 +57,13 @@ func (f URLFetcher) Fetch(url string) (urls []string, err error) {
 				} else {
 					ref := getHref(token)
 
-					// Our reference has the desired protocol
-					if strings.Index(ref, "http") == 0 {
-						urls = append(urls, ref)
-					}
+					urls = append(urls, ref)
 				}
 			} // end switch
 		} // end for
 	} // end if
+
+	fmt.Println("Finished parsing", url, "in", time.Since(startTime).Seconds(), "seconds")
 
 	return urls, nil
 }
