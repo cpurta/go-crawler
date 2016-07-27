@@ -3,7 +3,7 @@ crawler:
     links:
         - redis
         - influxdb
-    command: /app/crawler -depth 2 -seed-url 'https://www.youtube.com/watch?v=zNdkrtfZP8I' -search='^.*\/watch\?v=[a-zA-Z0-9\-]+'
+    command: /app/crawler -depth 3 -seed-url 'https://www.youtube.com/watch?v=zNdkrtfZP8I' -search='^.*\/watch\?v=[a-zA-Z0-9\-]+' -crawlers 10
 
 redis:
     image: redis:latest
@@ -15,7 +15,9 @@ influxdb:
     ports:
         - 8086:8086
     environment:
-        - PRE_CREATE_DB="crawler;telegraf"
+        - PRE_CREATE_DB="crawler"
+        - ADMIN_USER="root"
+        - INFLUXDB_INIT_PWD="temppwd"
 
 telegraf:
     image: telegraf:latest
@@ -25,7 +27,7 @@ telegraf:
         - redis
         - influxdb
 
-chronograf:
-    image: chronograf:latest
+grafana:
+    image: grafana/grafana:latest
     ports:
-        - 10000:10000
+        - 3000:3000
