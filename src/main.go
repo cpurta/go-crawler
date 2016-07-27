@@ -16,11 +16,14 @@ import (
 )
 
 var (
-	seedUrl string
-	search  string
-	depth   int
+	seedUrl  string
+	search   string
+	depth    int
+	crawlers int
 
 	validURL *regexp.Regexp
+
+	throttle chan int
 
 	// Environment variable from docker-compose
 	redisHost  string
@@ -44,6 +47,8 @@ func main() {
 		fmt.Printf("Error: %s", err.Error())
 	}
 
+	throttle = make(chan int, crawlers)
+
 	loadEnvironmentVariables()
 
 	redisClient := redis.NewClient(&redis.Options{
@@ -59,7 +64,7 @@ func main() {
 	influxClient, err := influx.NewHTTPClient(influx.HTTPConfig{
 		Addr:     fmt.Sprintf("http://%s:%s", influxHost, influxPort),
 		Username: "root",
-		Password: "root",
+		Password: "temppwd",
 	})
 
 	if err != nil {
@@ -75,6 +80,8 @@ func main() {
 }
 
 func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Client, influxClient influx.Client) {
+	throttle <- 1
+
 	if depth <= 0 {
 		return
 	}
@@ -106,6 +113,9 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 
 	if err != nil {
 		fmt.Printf("Error fetching results from %s: %s\n", searchUrl, err.Error())
+
+	} else {
+		fmt.Printf("Finished crawling %s in %.2f seconds\n", searchUrl, crawlTime.Seconds())
 	}
 
 	tags := map[string]string{
@@ -117,22 +127,6 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		"crawl_time":         crawlTime.Nanoseconds(),
 		"total_urls_crawled": len(urlcache.m),
 		"urls_by_page":       len(urls),
-	}
-
-	for _, u := range urls {
-		// check our cache to make sure that we are not about to crawl
-		// a page we have already visted
-		if !urlTest.MatchString(u) {
-			u = "http://" + host.Host + u
-		}
-
-		urlcache.lock.Lock()
-		_, crawled := urlcache.m[u]
-		urlcache.lock.Unlock()
-
-		if validURL.MatchString(u) && urlTest.MatchString(u) && !crawled {
-			Crawl(u, depth-1, fetcher, redisClient, influxClient)
-		}
 	}
 
 	point, _ := influx.NewPoint(
@@ -148,12 +142,36 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 	if err := influxClient.Write(bp); err != nil {
 		log.Printf("Unable to write batch point to influxdb: %s\n", err.Error())
 	}
+
+	var wg sync.WaitGroup
+
+	for _, u := range urls {
+		if !urlTest.MatchString(u) {
+			u = "http://" + host.Host + u
+		}
+
+		urlcache.lock.Lock()
+		_, crawled := urlcache.m[u]
+		urlcache.lock.Unlock()
+
+		if validURL.MatchString(u) && urlTest.MatchString(u) && !crawled {
+			wg.Add(1)
+			go func(u string, depth int, fetcher Fetcher, redisClient *redis.Client, influxClient influx.Client) {
+				defer wg.Done()
+				Crawl(u, depth-1, fetcher, redisClient, influxClient)
+			}(u, depth, fetcher, redisClient, influxClient)
+		}
+	}
+
+	<-throttle
+	wg.Wait()
 }
 
 func initFlags() {
 	flag.IntVar(&depth, "depth", 0, "The depth of how far the crawler will search in the network graph. Must be greater than 0.")
 	flag.StringVar(&seedUrl, "seed-url", "", "The root url from which the crawler will look for network links.")
 	flag.StringVar(&search, "search", "^.*$", `Regex that will be used against the urls crawled. Only urls matching the regex will be crawled. e.g. ^http(s)?://cnn.com\?+([0-9a-zA-Z]=[0-9a-zA-Z])$`)
+	flag.IntVar(&crawlers, "crawlers", 10, "The number of concurrent crawling routines that will be used to crawl the web. Default: 10")
 }
 
 func checkFlags() error {
