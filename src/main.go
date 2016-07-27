@@ -28,6 +28,8 @@ var (
 	influxHost string
 	influxPort string
 
+	crawlError = errors.New("already crawled")
+
 	urlTest = regexp.MustCompile(`^((http[s]?):\/)?\/?([^:\/\s]+)((\/\w+)*\/)([\w\-\.]+[^#?\s]+)(.*)?(#[\w\-]+)?$`)
 )
 
@@ -77,7 +79,7 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		return
 	}
 
-	fmt.Println("Crawling:", searchUrl)
+	fmt.Printf("Depth: %d Crawling: %s\n", depth, searchUrl)
 
 	bp, _ := influx.NewBatchPoints(influx.BatchPointsConfig{
 		Database:  "crawler",
@@ -93,14 +95,14 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 		redisClient.LPush(host.Host+"_crawler_queue", searchUrl)
 	}
 
+	urlcache.lock.Lock()
+	urlcache.m[searchUrl] = crawlError
+	urlcache.lock.Unlock()
+
 	// let's determine how long it is taking to fetch all urls on a page
 	startFetch := time.Now()
 	urls, err := fetcher.Fetch(searchUrl)
 	crawlTime := time.Since(startFetch)
-
-	urlcache.lock.Lock()
-	urlcache.m[searchUrl] = err
-	urlcache.lock.Unlock()
 
 	if err != nil {
 		fmt.Printf("Error fetching results from %s: %s\n", searchUrl, err.Error())
@@ -111,20 +113,22 @@ func Crawl(searchUrl string, depth int, fetcher Fetcher, redisClient *redis.Clie
 	}
 
 	fields := map[string]interface{}{
-		"urls_found": len(urls),
-		"crawl_time": crawlTime,
+		"urls_found":         len(urls),
+		"crawl_time":         crawlTime.Nanoseconds(),
+		"total_urls_crawled": len(urlcache.m),
+		"urls_by_page":       len(urls),
 	}
 
 	for _, u := range urls {
 		// check our cache to make sure that we are not about to crawl
 		// a page we have already visted
-		urlcache.lock.Lock()
-		_, crawled := urlcache.m[u]
-		urlcache.lock.Unlock()
-
 		if !urlTest.MatchString(u) {
 			u = "http://" + host.Host + u
 		}
+
+		urlcache.lock.Lock()
+		_, crawled := urlcache.m[u]
+		urlcache.lock.Unlock()
 
 		if validURL.MatchString(u) && urlTest.MatchString(u) && !crawled {
 			Crawl(u, depth-1, fetcher, redisClient, influxClient)

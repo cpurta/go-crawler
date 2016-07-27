@@ -1,13 +1,9 @@
-# still need to test regex -search='^http:\/\/www.youtube.com(\/{1}[a-zA-Z0-9]+)*\?([a-zA-Z0-9]+)*=*([a-zA-Z0-9]+)*$$'
-# docker compose attempt to use variables whenever there is a '$' so need to figure out how to escape that when using
-# compose
-
 crawler:
     build: .
     links:
         - redis
         - influxdb
-    command: /app/crawler -depth 5 -seed-url 'https://www.youtube.com/watch?v=zNdkrtfZP8I' -search='^.*\/watch\?v=[a-zA-Z0-9\-]+'
+    command: /app/crawler -depth 2 -seed-url 'https://www.youtube.com/watch?v=zNdkrtfZP8I' -search='^.*\/watch\?v=[a-zA-Z0-9\-]+'
 
 redis:
     image: redis:latest
@@ -24,7 +20,7 @@ influxdb:
 telegraf:
     image: telegraf:latest
     volumes:
-        - ./conf/telegraf.conf:/conf/telegraf/telegraf.conf:ro
+        - ./conf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
     links:
         - redis
         - influxdb
